@@ -39,20 +39,19 @@ st.markdown(
 # -----------------------------
 # Load environment variables
 # -----------------------------
-load_dotenv(dotenv_path=".env", override=True)
+load_dotenv()
 
 
 # -----------------------------
 # Get Gemini API key
 # -----------------------------
-api_key = os.getenv("GEMINI_API_KEY")
+api_key = st.secrets.get("GEMINI_API_KEY")
 
 if not api_key:
-    st.error("Gemini API key is not configured.")
+    st.error("Gemini API key is not configured in Streamlit Secrets.")
     st.stop()
 
 api_key = api_key.strip()
-
 
 # -----------------------------
 # Tesseract location
