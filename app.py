@@ -208,7 +208,7 @@ IMPORTANT SAFETY RULES:
             url = (
                 "https://generativelanguage.googleapis.com/"
                     "v1beta/models/gemini-3.8-flash:generateContent"
-                         )
+)
 
             payload = {
                 "contents": [
@@ -224,15 +224,17 @@ IMPORTANT SAFETY RULES:
 
             try:
 
+
+
                 response = requests.post(
-                    url,
-                    headers={
-                        "x-goog-api-key": api_key,
-                        "Content-Type": "application/json"
-                    },
-                    json=payload,
-                    timeout=60
-                )
+    url,
+    headers={
+        "x-goog-api-key": api_key,
+        "Content-Type": "application/json"
+    },
+    json=payload,
+    timeout=180
+)
 
 
                 # -----------------------------
