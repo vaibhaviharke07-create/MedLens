@@ -53,22 +53,7 @@ if not api_key:
 
 api_key = api_key.strip()
 
-st.write("Key loaded:", True)
-st.write("Key length:", len(api_key))
-st.write("Key starts with:", api_key[:4])
-st.write("Key ends with:", api_key[-4:])
-test_response = requests.get(
-    "https://generativelanguage.googleapis.com/v1beta/models",
-    headers={
-        "x-goog-api-key": api_key
-    },
-    timeout=30
-)
 
-st.write("Gemini connection test:", test_response.status_code)
-st.code(test_response.text[:1000])
-
-st.stop()
 # -----------------------------
 # Tesseract location
 # -----------------------------
@@ -116,10 +101,14 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
 
+    # -----------------------------
     # Open image
+    # -----------------------------
     image = Image.open(uploaded_file)
 
+    # -----------------------------
     # Display image
+    # -----------------------------
     st.image(
         image,
         caption="Uploaded Medicine Image",
@@ -150,13 +139,18 @@ if uploaded_file is not None:
         # Gemini analysis
         # -----------------------------
         st.subheader("🤖 MedLens AI Analysis")
+
         st.caption(
             "AI-generated explanation based only on the uploaded text."
         )
 
 
+        # -----------------------------
+        # Prompt
+        # -----------------------------
         prompt = f"""
 You are MedLens, an AI-powered medicine information assistant.
+
 Respond in {language}.
 
 Your job is to explain ONLY the information that can be identified
@@ -191,6 +185,7 @@ Explain the available information in easy language.
 Mention anything that could not be read or identified clearly.
 
 IMPORTANT SAFETY RULES:
+
 - Do not diagnose diseases.
 - Do not prescribe medicines.
 - Do not recommend changing, stopping, or starting medication.
@@ -206,12 +201,13 @@ IMPORTANT SAFETY RULES:
         # -----------------------------
         # Direct Gemini API request
         # -----------------------------
-        with st.spinner("🤖 Understanding the medicine information..."):
+        with st.spinner(
+            "🤖 Understanding the medicine information..."
+        ):
 
             url = (
                 "https://generativelanguage.googleapis.com/"
-                "v1beta/models/gemini-3.5-flash-lite:generateContent"
-                f"?key={api_key}"
+                "v1beta/models/gemini-2.5-flash:generateContent"
             )
 
             payload = {
@@ -230,17 +226,32 @@ IMPORTANT SAFETY RULES:
 
                 response = requests.post(
                     url,
+                    headers={
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json"
+                    },
                     json=payload,
                     timeout=60
                 )
 
+
+                # -----------------------------
+                # Check API response
+                # -----------------------------
                 if response.status_code != 200:
+
                     st.error(
                         f"Gemini API error: {response.status_code}"
                     )
+
                     st.code(response.text)
+
                     st.stop()
 
+
+                # -----------------------------
+                # Read Gemini response
+                # -----------------------------
                 result = response.json()
 
                 answer = (
@@ -250,16 +261,22 @@ IMPORTANT SAFETY RULES:
 
                 st.markdown(answer)
 
+
             except requests.exceptions.RequestException as e:
 
-                st.error("Could not connect to the Gemini API.")
+                st.error(
+                    "Could not connect to the Gemini API."
+                )
+
                 st.code(str(e))
+
 
             except (KeyError, IndexError):
 
                 st.error(
                     "Gemini returned an unexpected response."
                 )
+
                 st.code(response.text)
 
 
