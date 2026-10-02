@@ -3,8 +3,23 @@ from PIL import Image
 import pytesseract
 from dotenv import load_dotenv
 import os
-from google import genai
-from google.genai import types
+import requests
+import shutil
+
+
+# -----------------------------
+# Page configuration
+# -----------------------------
+st.set_page_config(
+    page_title="MedLens",
+    page_icon="💊",
+    layout="centered"
+)
+
+
+# -----------------------------
+# Custom CSS
+# -----------------------------
 st.markdown(
     """
     <style>
@@ -20,10 +35,16 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
+# -----------------------------
 # Load environment variables
+# -----------------------------
 load_dotenv(dotenv_path=".env", override=True)
 
+
+# -----------------------------
 # Get Gemini API key
+# -----------------------------
 api_key = os.getenv("GEMINI_API_KEY")
 
 if not api_key:
@@ -32,51 +53,51 @@ if not api_key:
 
 api_key = api_key.strip()
 
-client = genai.Client(
-    api_key=api_key,
-    http_options=types.HttpOptions(
-        api_version="v1"
-    )
-)
-# Tesseract location
-import shutil
 
+# -----------------------------
+# Tesseract location
+# -----------------------------
 tesseract_path = shutil.which("tesseract")
 
 if tesseract_path:
     pytesseract.pytesseract.tesseract_cmd = tesseract_path
 
-# Page configuration
-st.set_page_config(
-    page_title="MedLens",
-    page_icon="💊",
-    layout="centered"
-)
 
+# -----------------------------
 # Title
+# -----------------------------
 st.title("💊 MedLens")
 st.caption("Scan. Understand. Stay Informed.")
 st.subheader("AI-Powered Medicine Information Assistant")
-
 
 st.write(
     "Upload a medicine label or prescription image "
     "to extract and understand the information."
 )
+
 st.info(
     "💡 Upload a clear image of a medicine label or prescription "
     "to extract and understand the information."
 )
+
+
+# -----------------------------
+# Language selection
+# -----------------------------
 language = st.selectbox(
     "🌐 Choose explanation language",
     ["English", "Hindi", "Marathi"]
 )
 
+
+# -----------------------------
 # Upload image
+# -----------------------------
 uploaded_file = st.file_uploader(
     "📷 Upload a medicine label or prescription",
     type=["jpg", "jpeg", "png"]
 )
+
 
 if uploaded_file is not None:
 
@@ -87,12 +108,15 @@ if uploaded_file is not None:
     st.image(
         image,
         caption="Uploaded Medicine Image",
-        use_container_width=True
+        width="stretch"
     )
 
     st.success("Image uploaded successfully! ✅")
 
+
+    # -----------------------------
     # OCR
+    # -----------------------------
     with st.spinner("🔍 Reading the text..."):
         extracted_text = pytesseract.image_to_string(image)
 
@@ -106,13 +130,17 @@ if uploaded_file is not None:
             height=200
         )
 
+
+        # -----------------------------
         # Gemini analysis
+        # -----------------------------
         st.subheader("🤖 MedLens AI Analysis")
-        st.caption("AI-generated explanation based only on the uploaded text.")
+        st.caption(
+            "AI-generated explanation based only on the uploaded text."
+        )
 
-        with st.spinner("🤖 Understanding the medicine information..."):
 
-            prompt = f"""
+        prompt = f"""
 You are MedLens, an AI-powered medicine information assistant.
 Respond in {language}.
 
@@ -159,12 +187,66 @@ IMPORTANT SAFETY RULES:
   with a doctor or pharmacist.
 """
 
-            response = client.models.generate_content(
-                model="gemini-3.5-flash-lite",
-                contents=prompt
+
+        # -----------------------------
+        # Direct Gemini API request
+        # -----------------------------
+        with st.spinner("🤖 Understanding the medicine information..."):
+
+            url = (
+                "https://generativelanguage.googleapis.com/"
+                "v1beta/models/gemini-3.5-flash-lite:generateContent"
+                f"?key={api_key}"
             )
 
-        st.markdown(response.text)
+            payload = {
+                "contents": [
+                    {
+                        "parts": [
+                            {
+                                "text": prompt
+                            }
+                        ]
+                    }
+                ]
+            }
+
+            try:
+
+                response = requests.post(
+                    url,
+                    json=payload,
+                    timeout=60
+                )
+
+                if response.status_code != 200:
+                    st.error(
+                        f"Gemini API error: {response.status_code}"
+                    )
+                    st.code(response.text)
+                    st.stop()
+
+                result = response.json()
+
+                answer = (
+                    result["candidates"][0]
+                    ["content"]["parts"][0]["text"]
+                )
+
+                st.markdown(answer)
+
+            except requests.exceptions.RequestException as e:
+
+                st.error("Could not connect to the Gemini API.")
+                st.code(str(e))
+
+            except (KeyError, IndexError):
+
+                st.error(
+                    "Gemini returned an unexpected response."
+                )
+                st.code(response.text)
+
 
     else:
 
@@ -173,10 +255,14 @@ IMPORTANT SAFETY RULES:
             "Please upload a clearer medicine image."
         )
 
+
+# -----------------------------
 # Safety notice
+# -----------------------------
 st.warning(
     "⚠️ Medical Safety Notice: MedLens is an informational assistant "
     "and is not a substitute for a doctor or pharmacist. "
     "Do not change, stop, or start any medicine based only on this app. "
-    "Always verify important medical information with a qualified healthcare professional."
+    "Always verify important medical information with a qualified "
+    "healthcare professional."
 )
