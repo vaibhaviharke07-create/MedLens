@@ -4,6 +4,7 @@ import pytesseract
 from dotenv import load_dotenv
 import os
 from google import genai
+from google.genai import types
 st.markdown(
     """
     <style>
@@ -31,7 +32,12 @@ if not api_key:
 
 api_key = api_key.strip()
 
-client = genai.Client(api_key=api_key)
+client = genai.Client(
+    api_key=api_key,
+    http_options=types.HttpOptions(
+        api_version="v1"
+    )
+)
 # Tesseract location
 import shutil
 
