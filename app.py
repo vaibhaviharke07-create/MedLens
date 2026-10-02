@@ -25,9 +25,13 @@ load_dotenv(dotenv_path=".env", override=True)
 # Get Gemini API key
 api_key = os.getenv("GEMINI_API_KEY")
 
-# Create Gemini client
-client = genai.Client(api_key=api_key)
+if not api_key:
+    st.error("Gemini API key is not configured.")
+    st.stop()
 
+api_key = api_key.strip()
+
+client = genai.Client(api_key=api_key)
 # Tesseract location
 import shutil
 
