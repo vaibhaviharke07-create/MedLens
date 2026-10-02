@@ -53,6 +53,22 @@ if not api_key:
 
 api_key = api_key.strip()
 
+st.write("Key loaded:", True)
+st.write("Key length:", len(api_key))
+st.write("Key starts with:", api_key[:4])
+st.write("Key ends with:", api_key[-4:])
+test_response = requests.get(
+    "https://generativelanguage.googleapis.com/v1beta/models",
+    headers={
+        "x-goog-api-key": api_key
+    },
+    timeout=30
+)
+
+st.write("Gemini connection test:", test_response.status_code)
+st.code(test_response.text[:1000])
+
+st.stop()
 # -----------------------------
 # Tesseract location
 # -----------------------------
