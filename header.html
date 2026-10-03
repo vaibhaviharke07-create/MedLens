@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MedLens - Scan. Understand. Stay Informed.</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+{% macro rows(pairs) %}
+  <dl class="kv">
+    {% for k, v in pairs %}
+      <dt>{{ k }}</dt>
+      <dd>{% if v is none or v == '' %}<span class="na">—</span>{% else %}{{ v }}{% endif %}</dd>
+    {% endfor %}
+  </dl>
+{% endmacro %}
+
+<!-- ============================ HEADER ============================ -->
+<header class="hero">
+  <div class="wrap">
+    <div class="brand"><span class="logo" aria-hidden="true">+</span> MedLens</div>
+    <p class="tagline">Scan. Understand. Stay Informed.</p>
+    <p class="lede">An AI-powered medicine information and verification assistant that helps users
+      understand medicine labels and check identified batch information against the CDSCO dataset
+      included in MedLens.</p>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- Flow -->
+  <ol class="flow" aria-label="Process flow">
+    {% set steps = ['Upload Image', 'OCR Extraction', 'Medicine Info', 'CDSCO Check',
+                    'AI Explanation', 'Report', 'Human Verification'] %}
+    {% for s in steps %}
+      <li class="{{ 'done' if result else '' }}"><span class="num">{{ loop.index }}</span>{{ s }}</li>
+    {% endfor %}
+  </ol>
+
+  {% if error %}
+    <div class="alert alert-error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <!-- ============================ UPLOAD ============================ -->
+  <section class="card">
+    <h2>Scan a Medicine</h2>
+    <p class="muted">Upload a clear photo of a medicine label, package, or prescription.</p>
+
+    <form id="scan-form" method="POST" action="{{ url_for('index') }}" enctype="multipart/form-data">
+      <div class="grid-2">
+        <div class="upload">
+          <label for="med" class="upload-label">
+            <strong>Medicine label / package</strong>
+            <span class="muted small">PNG, JPG, JPEG or WEBP</span>
+          </label>
+          <input type="file" id="med" name="medicine_image" accept=".png,.jpg,.jpeg,.webp,image/*">
+          <div class="preview" id="med-preview"></div>
+        </div>
+        <div class="upload">
+          <label for="rx" class="upload-label">
+            <strong>Prescription <span class="muted small">(optional)</span></strong>
+            <span class="muted small">Used for the Prescription Cross-Check</span>
+          </label>
+          <input type="file" id="rx" name="prescription_image" accept=".png,.jpg,.jpeg,.webp,image/*">
+          <div class="preview" id="rx-preview"></div>
+        </div>
+      </div>
+      <button type="submit" id="analyze-btn" class="btn" disabled>Analyze Medicine</button>
+    </form>
+  </section>
+
+  {% if result %}
+  {% set info = result.info %}
+  {% set cd = result.cdsco %}
+
+  <!-- ============================ SCAN RESULTS ============================ -->
+  <h3 class="section-title">Scan Results</h3>
+
+  {% if result.low %}
+    <div class="alert alert-warn">Some information could not be read confidently. Please verify it from the original package.</div>
+  {% endif %}
+
+  <div class="grid-2">
+    <section class="card">
+      <h2>Medicine Information</h2>
+      {{ rows([
+        ('Product name', info.product_name), ('Strength', info.strength),
+        ('Dosage form', info.dosage_form), ('Manufacturer', info.manufacturer),
+        ('Batch number', info.batch_no), ('Manufacturing date', info.manufacturing_date),
+        ('Expiry date', info.expiry_date)]) }}
+      <p class="muted small">Fields marked “—” could not be read. Nothing is guessed or invented.</p>
+      {% if info.batch_no %}
+        <div class="pill pill-ok">Detected Batch Number: <strong>{{ info.batch_no }}</strong></div>
+      {% else %}
+        <div class="pill pill-neutral">Batch number could not be detected. Please verify the package manually.</div>
+      {% endif %}
+    </section>
+
+    <section class="card">
+      <h2>Extracted Information (OCR)</h2>
+      <p class="muted small">
+        OCR confidence:
+        {% if result.conf is not none %}<strong>{{ '%.0f'|format(result.conf) }}%</strong>{% else %}unavailable{% endif %}
+        {% if result.low %}· <span class="text-warn">low clarity</span>{% endif %}
+      </p>
+      <details>
+        <summary>View raw OCR text</summary>
+        <pre class="ocr">{{ result.text or '(No text detected)' }}</pre>
+      </details>
+      <div class="thumbs">
+        {% if result.med_preview %}<figure><img src="{{ result.med_preview }}" alt="Scanned medicine image"><figcaption>Medicine image</figcaption></figure>{% endif %}
+        {% if result.rx_preview %}<figure><img src="{{ result.rx_preview }}" alt="Scanned prescription image"><figcaption>Prescription</figcaption></figure>{% endif %}
+      </div>
+    </section>
+  </div>
+
+  <!-- ============================ CDSCO ============================ -->
+  <h3 class="section-title">CDSCO Verification</h3>
+
+  {% if cd.status == 'exact' %}
+    {% for r in cd.records %}
+    <section class="card card-warn">
+      <h2>⚠ Official Quality Alert Record Match</h2>
+      <p>This batch matches an official CDSCO quality-alert record included in the MedLens dataset.</p>
+      {{ rows([
+        ('Product', r.product_name), ('Batch Number', r.batch_no), ('Manufacturer', r.manufacturer),
+        ('Manufacturing Date', r.manufacturing_date), ('Expiry Date', r.expiry_date),
+        ('NSQ Result', r.nsq_result), ('Reporting Source', r.reporting_source),
+        ('Reporting Lab', r.reporting_lab), ('Alert Month', r.alert_month)]) }}
+      <p class="callout">Please verify the information with a pharmacist, manufacturer, or appropriate authority before making any decision.</p>
+    </section>
+    {% endfor %}
+
+  {% elif cd.status == 'possible' %}
+    <div class="alert alert-warn">Possible match only — based on product and manufacturer similarity, <strong>not</strong> an exact batch match. Please verify manually.</div>
+    {% for r in cd.records %}
+    <section class="card card-neutral">
+      <h2>Possible Match — Not Confirmed</h2>
+      {{ rows([
+        ('Product', r.product_name), ('Batch in record', r.batch_no),
+        ('Manufacturer', r.manufacturer), ('NSQ Result', r.nsq_result), ('Alert Month', r.alert_month)]) }}
+      <p class="muted small">The batch number on your package did not exactly match this record.</p>
+    </section>
+    {% endfor %}
+
+  {% elif cd.status == 'dataset_missing' %}
+    <div class="alert alert-error">The CDSCO dataset file (data/cdsco_nsq.csv) was not found.</div>
+
+  {% else %}
+    <section class="card card-info">
+      <h2>No matching record found in the MedLens CDSCO dataset.</h2>
+      {{ rows([('Records checked', cd.dataset_size), ('Batch checked', info.batch_no or 'Not detected')]) }}
+      <p class="muted small">A no-match only means no matching record exists in the dataset available to this application. It is not a confirmation of quality or authenticity.</p>
+    </section>
+  {% endif %}
+
+  <!-- ============================ AI ============================ -->
+  <h3 class="section-title">AI Explanation</h3>
+  {% if result.ai %}
+    <section class="card ai">{{ result.ai }}</section>
+  {% else %}
+    <div class="alert alert-warn">{{ result.ai_error }}</div>
+    <p class="muted small">OCR, batch extraction, CDSCO verification and the report below still work without AI.</p>
+  {% endif %}
+
+  <!-- ============================ PRESCRIPTION ============================ -->
+  <h3 class="section-title">Prescription Cross-Check</h3>
+  {% if result.rx %}
+    <section class="card">
+      {% if result.rx.meds %}
+        <p><strong>Medicines identified in prescription:</strong>
+          {% for n, s in result.rx.meds %}{{ n }}{% if s %} {{ s }}{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}</p>
+      {% endif %}
+      {% if result.rx.flags %}
+        <div class="alert alert-warn">Possible discrepancy detected — please verify with your doctor or pharmacist.</div>
+        <ul>{% for f in result.rx.flags %}<li>{{ f }}</li>{% endfor %}</ul>
+      {% else %}
+        <div class="alert alert-info">No discrepancies detected by automated comparison. This does not replace verification by your doctor or pharmacist.</div>
+      {% endif %}
+    </section>
+  {% else %}
+    <p class="muted">No prescription uploaded. Add one above to enable cross-checking.</p>
+  {% endif %}
+
+  <!-- ============================ REPORT ============================ -->
+  <h3 class="section-title">Verification Report</h3>
+  <section class="card report">
+    <div class="report-head">
+      <h1>MedLens Verification Report</h1>
+      <button type="button" class="btn btn-ghost no-print" onclick="window.print()">Print / Save PDF</button>
+    </div>
+    <div class="grid-2">
+      <div>
+        <h4>Scan Status</h4>
+        {{ rows([('Image received', 'Yes'), ('OCR completed', 'Yes'),
+                 ('OCR clarity', 'Low — verify manually' if result.low else 'Acceptable')]) }}
+        <h4>CDSCO Check</h4>
+        {{ rows([('Result', result.cd_label), ('Dataset', 'Local file: cdsco_nsq.csv'),
+                 ('Records in dataset', cd.dataset_size)]) }}
+      </div>
+      <div>
+        <h4>Medicine Information</h4>
+        {{ rows([('Product', info.product_name), ('Strength', info.strength),
+                 ('Dosage form', info.dosage_form), ('Manufacturer', info.manufacturer),
+                 ('Batch', info.batch_no), ('Mfg date', info.manufacturing_date),
+                 ('Expiry', info.expiry_date)]) }}
+      </div>
+    </div>
+    <h4>AI Explanation</h4>
+    {% if result.ai %}<div class="ai-inline">{{ result.ai }}</div>
+    {% else %}<p class="muted">Not available for this scan ({{ result.ai_error }})</p>{% endif %}
+    <h4>Items Requiring Verification</h4>
+    <ul class="checklist">
+      {% for t in result.todo %}<li>{{ t }}</li>
+      {% else %}<li>No unreadable fields, but please still verify everything on the physical package.</li>{% endfor %}
+    </ul>
+  </section>
+
+  <!-- ============================ CHECKLIST ============================ -->
+  <section class="card card-info">
+    <h2>Before You Rely on This Information</h2>
+    <ul class="checklist">
+      <li>Verify the medicine name on the physical package.</li>
+      <li>Verify the batch number.</li>
+      <li>Verify the expiry date.</li>
+      <li>Verify manufacturer details.</li>
+      <li>Confirm important information with a pharmacist or doctor.</li>
+      <li>Do not make medication changes based only on MedLens.</li>
+    </ul>
+  </section>
+  {% endif %}
+
+  <!-- ============================ SAFETY NOTICE (always shown) ============================ -->
+  <aside class="notice" role="note">
+    <strong>Medical Safety Notice</strong>
+    <p>MedLens is an informational assistant and is not a substitute for a doctor or pharmacist.
+      Do not start, stop, or change any medicine based only on this application. Always verify
+      important medical information with a qualified healthcare professional.</p>
+  </aside>
+</main>
+
+<footer class="footer">
+  <div class="wrap muted small">MedLens is a hackathon prototype. Demo dataset records are fictional.</div>
+</footer>
+
+<div class="overlay" id="overlay" hidden>
+  <div class="spinner" aria-hidden="true"></div>
+  <p>Reading label, checking records and preparing explanation…</p>
+</div>
+
+<script>
+(function () {
+  var form = document.getElementById('scan-form');
+  var btn = document.getElementById('analyze-btn');
+  var med = document.getElementById('med');
+  var rx = document.getElementById('rx');
+
+  function preview(input, boxId) {
+    var box = document.getElementById(boxId);
+    box.innerHTML = '';
+    if (!input.files || !input.files[0]) return;
+    var img = document.createElement('img');
+    img.alt = 'Image preview';
+    img.src = URL.createObjectURL(input.files[0]);
+    box.appendChild(img);
+  }
+
+  med.addEventListener('change', function () {
+    preview(med, 'med-preview');
+    btn.disabled = !(med.files && med.files.length);
+  });
+  rx.addEventListener('change', function () { preview(rx, 'rx-preview'); });
+
+  // The AI is only called when the form is submitted via "Analyze Medicine".
+  form.addEventListener('submit', function () {
+    document.getElementById('overlay').hidden = false;
+  });
+})();
+</script>
+</body>
+</html>
