@@ -2,9 +2,9 @@ import streamlit as st
 from PIL import Image
 import pytesseract
 from dotenv import load_dotenv
-import os
 import requests
 import shutil
+import time
 
 
 # -----------------------------
@@ -207,8 +207,8 @@ IMPORTANT SAFETY RULES:
 
             url = (
                 "https://generativelanguage.googleapis.com/"
-                    "v1beta/models/gemini-3.8-flash:generateContent"
-)
+                "v1beta/models/gemini-3.8-flash:generateContent"
+            )
 
             payload = {
                 "contents": [
@@ -222,97 +222,64 @@ IMPORTANT SAFETY RULES:
                 ]
             }
 
+
+            # -----------------------------
+            # Gemini request with retry
+            # -----------------------------
             try:
 
-    response = None
+                response = None
 
-    # Retry Gemini request if the service is temporarily unavailable
-    for attempt in range(3):
+                for attempt in range(3):
 
-        response = requests.post(
-            url,
-            headers={
-                "x-goog-api-key": api_key,
-                "Content-Type": "application/json"
-            },
-            json=payload,
-            timeout=180
-        )
+                    response = requests.post(
+                        url,
+                        headers={
+                            "x-goog-api-key": api_key,
+                            "Content-Type": "application/json"
+                        },
+                        json=payload,
+                        timeout=180
+                    )
 
-        # Success
-        if response.status_code == 200:
-            break
+                    # Successful response
+                    if response.status_code == 200:
+                        break
 
-        # Temporary server overload
-        if response.status_code == 503:
+                    # Gemini temporarily overloaded
+                    if response.status_code == 503:
 
-            if attempt < 2:
-                import time
+                        if attempt < 2:
 
-                wait_time = 5 * (attempt + 1)
+                            wait_time = 5 * (attempt + 1)
 
-                st.warning(
-                    f"Gemini is temporarily busy. "
-                    f"Retrying in {wait_time} seconds..."
-                )
+                            st.warning(
+                                f"Gemini is temporarily busy. "
+                                f"Retrying in {wait_time} seconds..."
+                            )
 
-                time.sleep(wait_time)
+                            time.sleep(wait_time)
 
-            else:
-                st.error(
-                    "Gemini is currently experiencing high demand. "
-                    "Please try again in a few moments."
-                )
+                        else:
 
-                st.stop()
+                            st.error(
+                                "Gemini is currently experiencing "
+                                "high demand. Please try again "
+                                "in a few moments."
+                            )
 
-        else:
-            st.error(
-                f"Gemini API error: {response.status_code}"
-            )
+                            st.stop()
 
-            st.code(response.text)
+                    # Other API errors
+                    else:
 
-            st.stop()
+                        st.error(
+                            f"Gemini API error: {response.status_code}"
+                        )
 
+                        st.code(response.text)
 
-    # -----------------------------
-    # Read Gemini response
-    # -----------------------------
-    result = response.json()
-
-    answer = (
-        result["candidates"][0]
-        ["content"]["parts"][0]["text"]
-    )
-
-    st.markdown(answer)
-
-
-except requests.exceptions.Timeout:
-
-    st.error(
-        "Gemini took too long to respond. "
-        "Please try again."
-    )
-
-
-except requests.exceptions.RequestException as e:
-
-    st.error(
-        "Could not connect to the Gemini API."
-    )
-
-    st.code(str(e))
-
-
-except (KeyError, IndexError):
-
-    st.error(
-        "Gemini returned an unexpected response."
-    )
-
-    st.code(response.text)
+                        st.stop()
 
 
                 # -----------------------------
@@ -328,6 +295,20 @@ except (KeyError, IndexError):
                 st.markdown(answer)
 
 
+            # -----------------------------
+            # Connection timeout
+            # -----------------------------
+            except requests.exceptions.Timeout:
+
+                st.error(
+                    "Gemini took too long to respond. "
+                    "Please try again."
+                )
+
+
+            # -----------------------------
+            # Connection error
+            # -----------------------------
             except requests.exceptions.RequestException as e:
 
                 st.error(
@@ -337,6 +318,9 @@ except (KeyError, IndexError):
                 st.code(str(e))
 
 
+            # -----------------------------
+            # Unexpected response
+            # -----------------------------
             except (KeyError, IndexError):
 
                 st.error(
